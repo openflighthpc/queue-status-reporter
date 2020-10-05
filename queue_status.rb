@@ -73,7 +73,7 @@ msg = ["\n",
        "#{idle.length} node(s) are idle",
        (": #{idle.join(", ")}" if idle.any?),
        "\n",
-       "#{no_jobs_in_partitions.length} node(s) have no jobs in their partitions",
+       "#{no_jobs_in_partitions.length} node(s) have no jobs in any of their partitions",
        (": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?),
        "\n",
        "#{down.length} node(s) are down",
@@ -84,10 +84,16 @@ msg = ["\n",
 ].compact
 
 partitions.each do |partition, jobs|
-  msg << "#{jobs[:running].length} job(s) running on #{partition}\n"
-  msg << "#{jobs[:pending].length} job(s) pending on #{partition}\n\n"
+  msg << "#{jobs[:running].length} job(s) running on partition #{partition}\n"
+  msg << "#{jobs[:pending].length} job(s) pending on partition #{partition}\n\n"
 end
 
 msg = msg.join("")
-puts msg
-send_slack_message(msg)
+slack = ARGV.include?("slack")
+text = ARGV.include?("text")
+if !slack && !text
+  slack = true
+  text = true
+end
+puts msg if text
+send_slack_message(msg) if slack
