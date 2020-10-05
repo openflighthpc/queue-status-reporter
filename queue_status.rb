@@ -19,6 +19,7 @@ result = result.slice(2, result.length)
 nodes = {}
 idle = []
 allocated = []
+mixed = []
 result.each do |node|
   node = node.split(" ").compact
   partition_name = node[2].gsub("*", "")
@@ -31,6 +32,7 @@ result.each do |node|
   partitions[partition_name][:alive_nodes] = (partitions[partition_name][:alive_nodes] << node_name).uniq
   idle << node_name if node[3] == "idle"
   allocated << node_name if (node[3] == "allocated" || node[3].include?("comp"))
+  mixed << node_name if node[3] == "mixed"
 end
 
 # determine unresponsive nodes
@@ -102,6 +104,9 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "\n",
        "#{idle.length} node(s) are idle",
        (": #{idle.join(", ")}" if idle.any?),
+       "\n",
+       "#{mixed.length} node(s) are mixed (some CPUs in use, some idle)",
+       (": #{mixed.join(", ")}" if mixed.any?),
        "\n",
        "#{no_jobs_in_partitions.length} active node(s) have no jobs in any of their partitions",
        (": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?),
