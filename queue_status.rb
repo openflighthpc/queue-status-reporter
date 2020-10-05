@@ -5,12 +5,14 @@ def send_slack_message(msg)
   HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": "tim-test", "as_user": true})
 end
 
+# determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
 result = data.gsub("*", "").split("\n")
 result = result.slice(1, result.length)
 result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: []} }
 
+# determine nodes, their status and their partitions
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl)
 result = data.split("\n")
 result = result.slice(2, result.length)
@@ -21,7 +23,6 @@ result.each do |node|
   node = node.split(" ").compact
   partition_name = node[2].gsub("*", "")
   node_name = node[0]
-  # record node names and their partitions
   if nodes.has_key?(node_name)
     nodes[node_name] = nodes[node_name] << partition_name
   else
@@ -32,6 +33,7 @@ result.each do |node|
   allocated << node_name if (node[3] == "allocated" || node[3].include?("comp"))
 end
 
+# determine unresponsive nodes
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl --dead)
 result = data.split("\n")
 result = result.slice(2, result.length)
@@ -51,6 +53,7 @@ idle.uniq!
 allocated.uniq!
 down.uniq!
 
+# determine jobs, their status and partitions
 data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %r')
 total_pending = 0
 total_running = 0
@@ -67,6 +70,7 @@ result.each do |job|
   end
 end
 
+# determine nodes with no jobs in any of their partitions
 no_jobs_in_partitions = []
 nodes.each do |node, queues|
   if !down.include?(node)
@@ -79,6 +83,7 @@ nodes.each do |node, queues|
   end
 end
 
+# determine jobs for partitions with no available resources
 jobs_no_resources = 0
 partition_msg = ""
 partitions.each do |partition, details|
