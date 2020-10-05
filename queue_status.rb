@@ -1,3 +1,4 @@
+
 require 'time'
 require 'httparty'
 
@@ -65,26 +66,28 @@ nodes.each do |node, queues|
   no_jobs_in_partitions << node if !jobs
 end
 
-puts
-print "#{allocated.length} node(s) are allocated"
-print ": #{allocated.join(", ")}" if allocated.any?
-puts
-print "#{idle.length} node(s) are idle"
-print ": #{idle.join(", ")}" if idle.any?
-puts
-print "#{no_jobs_in_partitions.length} node(s) have no jobs in their partitions"
-print ": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?
-puts
-print "#{down.length} node(s) are down"
-print ": #{down.join(", ")}" if down.any?
-puts
-puts
-puts "#{total_running} total job(s) running"
-puts "#{total_pending} total job(s) pending"
-puts
+msg = ["\n",
+       "#{allocated.length} node(s) are allocated",
+       (": #{allocated.join(", ")}" if allocated.any?),
+       "\n",
+       "#{idle.length} node(s) are idle",
+       (": #{idle.join(", ")}" if idle.any?),
+       "\n",
+       "#{no_jobs_in_partitions.length} node(s) have no jobs in their partitions",
+       (": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?),
+       "\n",
+       "#{down.length} node(s) are down",
+       (": #{down.join(", ")}" if down.any?),
+       "\n\n",
+       "#{total_running} total job(s) running\n",
+       "#{total_pending} total job(s) pending\n\n"
+].compact
 
 partitions.each do |partition, jobs|
-  puts "#{jobs[:running].length} job(s) running on #{partition}"
-  puts "#{jobs[:pending].length} job(s) pending on #{partition}"
-  puts
+  msg << "#{jobs[:running].length} job(s) running on #{partition}\n"
+  msg << "#{jobs[:pending].length} job(s) pending on #{partition}\n\n"
 end
+
+msg = msg.join("")
+puts msg
+send_slack_message(msg)
