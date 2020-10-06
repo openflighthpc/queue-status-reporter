@@ -9,6 +9,50 @@ def wait_threshold
   ENV['WAIT_THRESHOLD'] || 5
 end
 
+def future_wait_threshold
+  ENV['FUTURE_WAIT_THRESHOLD'] || 5
+end
+
+# slurm gives remaining job times in the following formats:
+# "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours",
+# "days-hours:minutes" and "days-hours:minutes:seconds".
+# slurm gives remaining job times in the following formats:
+# "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours",
+# "days-hours:minutes" and "days-hours:minutes:seconds".
+def determine_time(amount)
+  return -1 if amount == "UNLIMITED"
+
+  days = false
+  seconds = 0
+  if amount.include?("-")
+    days = true
+    amount = amount.split("-")
+    seconds += amount[0].to_i * 24 * 60 * 60 # days
+    amount = amount[1]
+  end
+  amount = amount.split(":")
+  if amount.length == 1
+    if days
+      seconds += amount[0].to_i * 60 * 60 # hours
+    else
+      seconds += amount[0].to_i * 60 # minutes
+    end
+  elsif amount.length == 2
+    if days
+      seconds += amount[0].to_i * 60 * 60 # hours
+      seconds += amount[1].to_i * 60 # minutes
+    else
+      seconds += amount[0].to_i * 60 # minutes
+      seconds += amount[1].to_i # seconds
+    end
+  else
+    seconds += amount[0].to_i * 60 * 60 # hours
+    seconds += amount[1].to_i * 60 # minutes
+    seconds += amount[2].to_i # seconds
+  end
+  seconds / 60
+end
+
 # determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
@@ -65,7 +109,7 @@ total_pending = 0
 total_running = 0
 result = data.split("\n")
 result = result.slice(1, result.length)
-result.each do |job|
+result.reverse.each do |job|
   job = job.split(" ").compact
   if job[5] == "PENDING"
     partitions[job[6]][:pending] = partitions[job[6]][:pending] << job
@@ -93,18 +137,32 @@ end
 jobs_no_resources = 0
 partition_msg = ""
 total_long_waiting = 0
+total_future_waiting = 0
 partitions.each do |partition, details|
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
   waiting = []
+  future_waiting = []
+  future_wait = 0
+  details[:running].each do |job|
+    time = determine_time(job[8])
+    future_wait += time if time > 0
+  end
   details[:pending].each do |job|
-    wait = ((Time.now - Time.parse(job[7]))/60).to_i
-    if wait >= wait_threshold
+    if future_wait >= future_wait_threshold
+      future_waiting << job
+      total_future_waiting += 1
+    end
+    wait_so_far = ((Time.now - Time.parse(job[7]))/60).to_i
+    if wait_so_far >= wait_threshold
       waiting << job
       total_long_waiting += 1
     end
+    time = determine_time(job[8])
+    future_wait += time if time > 0
   end
   partition_msg << "#{waiting.length} job(s) have been pending for longer than #{wait_threshold}mins\n"
+  partition_msg << "#{future_waiting.length} job(s) may not start within #{future_wait_threshold}mins\n"
   if !details[:alive_nodes].any?
     partition_msg << "Partition #{partition} has no available resources\n"
     jobs_no_resources += (details[:running].length + details[:pending].length)
@@ -131,6 +189,7 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "#{total_running} total job(s) running\n",
        "#{total_pending} total job(s) pending\n",
        "#{total_long_waiting} total job(s) have been pending for more than #{wait_threshold}mins\n",
+       "#{total_future_waiting} total job(s) may not start within #{future_wait_threshold}mins\n",
        "#{jobs_no_resources} total job(s) with no available resources\n\n",
        partition_msg
 ].compact
