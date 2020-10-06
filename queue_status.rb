@@ -5,6 +5,10 @@ def send_slack_message(msg)
   HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": "tim-test", "as_user": true})
 end
 
+def wait_threshold
+  ENV['WAIT_THRESHOLD'] ? ENV['WAIT_THRESHOLD'] : 5
+end
+
 # determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
@@ -56,7 +60,7 @@ allocated.uniq!
 down.uniq!
 
 # determine jobs, their status and partitions
-data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %r')
+data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %r' --priority)
 total_pending = 0
 total_running = 0
 result = data.split("\n")
@@ -88,9 +92,19 @@ end
 # determine jobs for partitions with no available resources
 jobs_no_resources = 0
 partition_msg = ""
+total_long_waiting = 0
 partitions.each do |partition, details|
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
+  waiting = []
+  details[:pending].each do |job|
+    wait = ((Time.now - Time.parse(job[7]))/60).to_i
+    if wait >= wait_threshold
+      waiting << job
+      total_long_waiting += 1
+    end
+  end
+  partition_msg << "#{waiting.length} job(s) have been pending for longer than #{wait_threshold}mins\n"
   if !details[:alive_nodes].any?
     partition_msg << "Partition #{partition} has no available resources\n"
     jobs_no_resources += (details[:running].length + details[:pending].length)
@@ -116,6 +130,7 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "\n\n",
        "#{total_running} total job(s) running\n",
        "#{total_pending} total job(s) pending\n",
+       "#{total_long_waiting} total job(s) have been pending for more than #{wait_threshold}mins\n",
        "#{jobs_no_resources} total job(s) with no available resources\n\n",
        partition_msg
 ].compact
