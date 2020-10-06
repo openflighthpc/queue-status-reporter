@@ -16,17 +16,14 @@ end
 # slurm gives remaining job times in the following formats:
 # "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours",
 # "days-hours:minutes" and "days-hours:minutes:seconds".
-# slurm gives remaining job times in the following formats:
-# "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours",
-# "days-hours:minutes" and "days-hours:minutes:seconds".
 def determine_time(amount)
-  return -1 if amount == "UNLIMITED" || amount == "NOT_SET"
+  return 0.0 if amount == "UNLIMITED" || amount == "NOT_SET"
 
   days = false
-  seconds = 0
+  seconds = 0.0
   if amount.include?("-")
     amount = amount.split("-")
-    return -1 if amount[0].to_i > 300 # don't include jobs where slurm decides it will take a year
+    return 0.0 if amount[0].to_i > 300 # don't include jobs where slurm decides it will take a year
 
     days = true
     seconds += amount[0].to_i * 24 * 60 * 60 # days
@@ -52,20 +49,20 @@ def determine_time(amount)
     seconds += amount[1].to_i * 60 # minutes
     seconds += amount[2].to_i # seconds
   end
-  seconds / 60
+  seconds / 60.0
 end
 
 # determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
 result = data.gsub("*", "").split("\n")
-result = result.slice(1, result.length)
+result.shift
 result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: []} }
 
 # determine nodes, their status and their partitions
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl)
 result = data.split("\n")
-result = result.slice(2, result.length)
+result.shift(2)
 nodes = {}
 idle = []
 allocated = []
@@ -88,7 +85,7 @@ end
 # determine unresponsive nodes
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl --dead)
 result = data.split("\n")
-result = result.slice(2, result.length)
+result.shift(2)
 down = []
 result.each do |node|
   node = node.split(" ").compact
@@ -110,7 +107,7 @@ data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %r' -
 total_pending = 0
 total_running = 0
 result = data.split("\n")
-result = result.slice(1, result.length)
+result.shift
 result.reverse.each do |job|
   job = job.split(" ").compact
   if job[5] == "PENDING"
@@ -145,23 +142,21 @@ partitions.each do |partition, details|
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
   waiting = []
   future_waiting = []
-  future_wait = 0
+  future_wait = 0.0
   details[:running].each do |job|
-    time = determine_time(job[8])
-    future_wait += time if time > 0
+    future_wait += determine_time(job[8])
   end
   details[:pending].each do |job|
     if future_wait >= future_wait_threshold
       future_waiting << job
       total_future_waiting += 1
     end
-    wait_so_far = ((Time.now - Time.parse(job[7]))/60).to_i
+    wait_so_far = ((Time.now - Time.parse(job[7]))/60.0)
     if wait_so_far >= wait_threshold
       waiting << job
       total_long_waiting += 1
     end
-    time = determine_time(job[8])
-    future_wait += time if time > 0
+    future_wait += determine_time(job[8])
   end
   partition_msg << "#{waiting.length} job(s) have been pending for longer than #{wait_threshold}mins\n"
   partition_msg << "#{future_waiting.length} job(s) may not start within #{future_wait_threshold}mins\n"
