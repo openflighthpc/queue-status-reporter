@@ -20,13 +20,15 @@ end
 # "minutes", "minutes:seconds", "hours:minutes:seconds", "days-hours",
 # "days-hours:minutes" and "days-hours:minutes:seconds".
 def determine_time(amount)
-  return -1 if amount == "UNLIMITED"
+  return -1 if amount == "UNLIMITED" || amount == "NOT_SET"
 
   days = false
   seconds = 0
   if amount.include?("-")
-    days = true
     amount = amount.split("-")
+    return -1 if amount[0].to_i > 300 # don't include jobs where slurm decides it will take a year
+
+    days = true
     seconds += amount[0].to_i * 24 * 60 * 60 # days
     amount = amount[1]
   end
