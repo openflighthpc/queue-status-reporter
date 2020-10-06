@@ -6,7 +6,7 @@ def send_slack_message(msg)
 end
 
 def wait_threshold
-  ENV['WAIT_THRESHOLD'] ? ENV['WAIT_THRESHOLD'] : 5
+  ENV['WAIT_THRESHOLD'] || 5
 end
 
 # determine partitions
