@@ -9,6 +9,14 @@ def wait_threshold
   ENV['WAIT_THRESHOLD'] || 720
 end
 
+def wait_threshold_hours
+  wait_threshold.divmod(60)[0]
+end
+
+def wait_threshold_mins
+  wait_threshold.divmod(60)[1]
+end
+
 # determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
@@ -90,24 +98,33 @@ nodes.each do |node, queues|
 end
 
 # determine jobs for partitions with no available resources
-jobs_no_resources = 0
+jobs_no_resources = []
 partition_msg = ""
-total_long_waiting = 0
+total_long_waiting = []
 partitions.each do |partition, details|
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
   waiting = []
   details[:pending].each do |job|
-    wait = ((Time.now - Time.parse(job[7]))/60).to_i
+    estimated_start = Time.parse(job[10]) rescue nil
+    wait = (estimated_start - Time.now) / 60.0 if estimated_start
+    wait = nil if wait > (300 * 24 * 60) if wait # ignore jobs due in a year
+    wait ||= (Time.now - Time.parse(job[7])) / 60.0
     if wait >= wait_threshold
       waiting << job
-      total_long_waiting += 1
+      total_long_waiting << job
     end
   end
-  partition_msg << "#{waiting.length} job(s) have been pending for longer than #{wait_threshold}mins\n"
+  partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
+  partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
+  partition_msg << "\n"
+
   if !details[:alive_nodes].any?
-    partition_msg << "Partition #{partition} has no available resources\n"
-    jobs_no_resources += (details[:running].length + details[:pending].length)
+    partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
+    jobs = details[:running] + details[:pending]
+    partition_msg << "Impacts jobs: " if jobs.any?
+    partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" if jobs.any?
+    jobs_no_resources += jobs
   end
   partition_msg << "\n"
 end
@@ -130,8 +147,12 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "\n\n",
        "#{total_running} total job(s) running\n",
        "#{total_pending} total job(s) pending\n",
-       "#{total_long_waiting} total job(s) have been pending for more than #{wait_threshold}mins\n",
-       "#{jobs_no_resources} total job(s) with no available resources\n\n",
+       "#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission",
+       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any?),
+       "\n",
+       "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
+       (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any?),
+       "\n\n",
        partition_msg
 ].compact
 
@@ -142,5 +163,5 @@ if !slack && !text
   slack = true
   text = true
 end
-puts msg.gsub("*", "")  if text
+puts msg.gsub("*", "").gsub(":awooga:", "")  if text
 send_slack_message(msg) if slack
