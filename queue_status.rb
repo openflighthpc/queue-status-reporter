@@ -22,7 +22,7 @@ partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
 result = data.gsub("*", "").split("\n")
 result.shift
-result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: []} }
+result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: [], available: nil} }
 
 # determine nodes, their status and their partitions
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl)
@@ -101,10 +101,16 @@ end
 jobs_no_resources = []
 partition_msg = ""
 total_long_waiting = []
+final_job_end = nil
 partitions.each do |partition, details|
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
   waiting = []
+  last_job_end_time = nil
+  details[:running].each do |job|
+    estimated_end = Time.parse(job[11]) rescue nil
+    last_job_end_time = estimated_end if estimated_end && (!last_job_end_time || estimated_end > last_job_end_time)
+  end
   details[:pending].each do |job|
     estimated_start = Time.parse(job[10]) rescue nil
     if estimated_start
@@ -116,10 +122,15 @@ partitions.each do |partition, details|
       waiting << job
       total_long_waiting << job
     end
+    estimated_end = Time.parse(job[11]) rescue nil
+    last_job_end_time = estimated_end if estimated_end && (!last_job_end_time || estimated_end > last_job_end_time)
   end
+  final_job_end = last_job_end_time if last_job_end_time && (!final_job_end || last_job_end_time > final_job_end)
+
   partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
   partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
   partition_msg << "\n"
+  partition_msg << "Estimated time all jobs completed: #{last_job_end_time ? last_job_end_time : 'unknown'}\n" if last_job_end_time
 
   if !details[:alive_nodes].any?
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
@@ -154,7 +165,9 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "\n",
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
        (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any?),
-       "\n\n",
+       "\n",
+        ("Estimated time all jobs completed: #{final_job_end ? final_job_end : 'unknown'}\n" if (total_running + total_pending) > 0),
+       "\n",
        partition_msg
 ].compact
 
