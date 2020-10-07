@@ -6,20 +6,20 @@ def send_slack_message(msg)
 end
 
 def wait_threshold
-  ENV['WAIT_THRESHOLD'] || 5
+  ENV['WAIT_THRESHOLD'] || 720
 end
 
 # determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
 result = data.gsub("*", "").split("\n")
-result = result.slice(1, result.length)
+result.shift
 result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: []} }
 
 # determine nodes, their status and their partitions
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl)
 result = data.split("\n")
-result = result.slice(2, result.length)
+result.shift(2)
 nodes = {}
 idle = []
 allocated = []
@@ -42,7 +42,7 @@ end
 # determine unresponsive nodes
 data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl --dead)
 result = data.split("\n")
-result = result.slice(2, result.length)
+result.shift(2)
 down = []
 result.each do |node|
   node = node.split(" ").compact
@@ -60,11 +60,11 @@ allocated.uniq!
 down.uniq!
 
 # determine jobs, their status and partitions
-data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %r' --priority)
+data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
 total_pending = 0
 total_running = 0
 result = data.split("\n")
-result = result.slice(1, result.length)
+result.shift
 result.each do |job|
   job = job.split(" ").compact
   if job[5] == "PENDING"
