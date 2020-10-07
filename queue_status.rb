@@ -130,7 +130,7 @@ partitions.each do |partition, details|
   partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
   partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
   partition_msg << "\n"
-  partition_msg << "Estimated time all jobs completed: #{last_job_end_time ? last_job_end_time : 'unknown'}\n" if last_job_end_time
+  partition_msg << "Estimated time all jobs completed: #{last_job_end_time ? last_job_end_time : 'unknown'}\n" if details[:pending].any? || details[:running].any?
 
   if !details[:alive_nodes].any?
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
