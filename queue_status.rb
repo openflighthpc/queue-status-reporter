@@ -134,7 +134,7 @@ partitions.each do |partition, details|
       if wait && wait >= wait_threshold || ((Time.now - Time.parse(job[7])) / 60.0) >= wait_threshold
         waiting << job
         total_long_waiting << job
-      elsif !wait
+      elsif !estimated_start
         cant_determine_wait << job
         total_cant_determine_wait << job
       end
