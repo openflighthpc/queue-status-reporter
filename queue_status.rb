@@ -97,7 +97,7 @@ nodes.each do |node, queues|
   end
 end
 
-# determine long waiting jobs and estimated end times
+# determine jobs per partition
 jobs_no_resources = []
 partition_msg = ""
 total_long_waiting = []
@@ -109,22 +109,28 @@ partitions.each do |partition, details|
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
 
+  # only calculate times if partition has resources, as otherwise we know jobs are stuck
   if details[:alive_nodes].any?
     waiting = []
     cant_determine_wait = []
     last_job_end_time = nil
-    last_job_end_time_valid = true
+    all_end_times_valid = true
+
     details[:running].each do |job|
       estimated_end = Time.parse(job[11]) rescue nil
-      last_job_end_time_valid = false if !estimated_end
+      all_end_times_valid = false if !estimated_end
       last_job_end_time = estimated_end if estimated_end && (!last_job_end_time || last_job_end_time && estimated_end > last_job_end_time)
     end
+
     details[:pending].each do |job|
       estimated_start = Time.parse(job[10]) rescue nil
       if estimated_start
         wait = (estimated_start - Time.now) / 60.0
         wait = nil if wait > (300 * 24 * 60) # ignore jobs slurm decides will take 1 year to start
       end
+
+      # flag job as long waiting if wait exceeds threshold. If no estimated start from slurm, use
+      # time since job was submitted, as could already have been pending for a long period.
       if wait && wait >= wait_threshold || ((Time.now - Time.parse(job[7])) / 60.0) >= wait_threshold
         waiting << job
         total_long_waiting << job
@@ -132,16 +138,23 @@ partitions.each do |partition, details|
         cant_determine_wait << job
         total_cant_determine_wait << job
       end
+      
+      # determine if a valid end time provided by slurm. If so, use for determining latest valid
+      # job end for jobs on this partition.
       estimated_end = Time.parse(job[11]) rescue nil
       if estimated_end
         estimated_end = nil if estimated_end - Time.now > (300 * 24 * 600) # ignore jobs slurm decides will take 1 year to end
         last_job_end_time = estimated_end if estimated_end && (!last_job_end_time || last_job_end_time && estimated_end > last_job_end_time)
       end
-      last_job_end_time_valid = false if !estimated_end
+      # record if all jobs have valid end time estimates on this partition
+      all_end_times_valid = false if !estimated_end
     end
-    final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !last_job_end_time_valid
+
+    # record if an unbroken series of valid end times and value of the latest valid end date across all partitions
+    final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !all_end_times_valid
     final_job_end = last_job_end_time if last_job_end_time && (!final_job_end || last_job_end_time > final_job_end)
 
+    # show if jobs with unknown start times for this partition
     if cant_determine_wait.length > 0 && cant_determine_wait.length == details[:pending].length
       partition_msg << "Insufficient data to estimate job start times\n"
     elsif details[:pending].any?
@@ -153,8 +166,10 @@ partitions.each do |partition, details|
         partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }\n"
       end
     end
+
+    # show estimated end of current jobs, or latest value available
     if details[:pending].any? || details[:running].any?
-      if last_job_end_time_valid
+      if all_end_times_valid
         partition_msg << "Estimated time all jobs completed: #{last_job_end_time}\n" 
       else
         partition_msg << "Insufficient data to estimate time all jobs completed"
@@ -162,7 +177,8 @@ partitions.each do |partition, details|
         partition_msg << "\n"
       end
     end
-  # jobs with no resources
+
+  # highlight jobs with no resources
   else
     final_job_end_valid = false
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
@@ -174,6 +190,7 @@ partitions.each do |partition, details|
   partition_msg << "\n"
 end
 
+# nodes and job totals
 msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "#{allocated.length} node(s) are allocated",
        (": #{allocated.join(", ")}" if allocated.any?),
