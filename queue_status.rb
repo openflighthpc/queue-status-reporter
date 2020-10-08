@@ -98,6 +98,14 @@ nodes.each do |node, queues|
   end
 end
 
+def disjunctive(list, spec, index)
+  # Return a list of jobs on the given partition where each job exists in at least one other partition
+
+  new = list.dup.tap { |l| l.delete_at(index) } # create copy of partitions list sans the current partition
+  unions = new.map { |p| p & spec } # find the union (&) of partition 'spec' with each other set in 'new'
+  return unions.reduce(:|) # find the intersection (|) of the unions
+end
+
 # determine jobs per partition
 jobs_no_resources = []
 partition_msg = ""
@@ -105,11 +113,12 @@ total_long_waiting = []
 total_cant_determine_wait = []
 final_job_end = nil
 final_job_end_valid = true
-partitions.each do |partition, details|
+all_pending_ids = partitions.map { |k,v| v[:pending].map { |x| x[1] } }
+partitions.each_with_index do |(partition, details), index|
   partition_msg << "*Partition #{partition}*\n"
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
-
+  partition_msg << "#{disjunctive(all_pending, all_pending[index], index).length} of these pending jobs exist on at  least one other partition\n"
   # only calculate times if partition has resources, as otherwise we know jobs are stuck
   if details[:alive_nodes].any?
     waiting = []
