@@ -107,8 +107,10 @@ partitions.each do |partition, details|
   waiting = []
   details[:pending].each do |job|
     estimated_start = Time.parse(job[10]) rescue nil
-    wait = (estimated_start - Time.now) / 60.0 if estimated_start
-    wait = nil if wait > (300 * 24 * 60) if wait # ignore jobs due in a year
+    if estimated_start
+      wait = (estimated_start - Time.now) / 60.0
+      wait = wait > (300 * 24 * 60) ? nil : wait
+    end
     wait ||= (Time.now - Time.parse(job[7])) / 60.0
     if wait >= wait_threshold
       waiting << job
