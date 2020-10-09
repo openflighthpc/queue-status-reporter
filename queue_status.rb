@@ -65,6 +65,7 @@ end
 
 idle.uniq!
 allocated.uniq!
+mixed.uniq!
 down.uniq!
 
 # determine jobs, their status and partitions
