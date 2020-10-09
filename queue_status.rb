@@ -124,14 +124,15 @@ partitions.each do |partition, details|
 
     details[:pending].each do |job|
       estimated_start = Time.parse(job[10]) rescue nil
+      submit_time = Time.parse(job[7])
       if estimated_start
-        wait = (estimated_start - Time.now) / 60.0
+        wait = (estimated_start - submit_time) / 60.0
         wait = nil if wait > (300 * 24 * 60) # ignore jobs slurm decides will take 1 year to start
       end
 
       # flag job as long waiting if wait exceeds threshold. If no estimated start from slurm, use
       # time since job was submitted, as could already have been pending for a long period.
-      if wait && wait >= wait_threshold || ((Time.now - Time.parse(job[7])) / 60.0) >= wait_threshold
+      if wait && wait >= wait_threshold || ((Time.now - submit_time) / 60.0) >= wait_threshold
         waiting << job
         total_long_waiting << job
       elsif !estimated_start
@@ -159,11 +160,11 @@ partitions.each do |partition, details|
       partition_msg << "Insufficient data to estimate job start times\n"
     elsif details[:pending].any?
       partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
-      partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
+      partition_msg << ": #{waiting.sort.map {|job| job[1] }.join(", ") }" if waiting.any?
       partition_msg << "\n"
       if cant_determine_wait.any?
         partition_msg << "Insufficient data to estimate job start times for #{cant_determine_wait.length} job(s)"
-        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }\n"
+        partition_msg << ": #{cant_determine_wait.sort.map {|job| job[1] }.join(", ") }\n"
       end
     end
 
@@ -189,6 +190,9 @@ partitions.each do |partition, details|
   end
   partition_msg << "\n"
 end
+jobs_no_resources.sort!
+total_long_waiting.sort!
+total_cant_determine_wait.sort!
 
 # nodes and job totals
 msg = ["*#{Time.now.strftime("%F %T")}*\n",
