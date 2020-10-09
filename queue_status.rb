@@ -118,7 +118,7 @@ partitions.each_with_index do |(partition, details), index|
   partition_msg << "*Partition #{partition}*\n"
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
-  partition_msg << "#{disjunctive(all_pending, all_pending[index], index).length} of these pending jobs exist on at  least one other partition\n"
+  partition_msg << "#{disjunctive(all_pending_ids, all_pending_ids[index], index).length} of these pending jobs exist on at  least one other partition\n"
   # only calculate times if partition has resources, as otherwise we know jobs are stuck
   if details[:alive_nodes].any?
     waiting = []
