@@ -150,6 +150,8 @@ partitions.each do |partition, details|
       # record if all jobs have valid end time estimates on this partition
       all_end_times_valid = false if !estimated_end
     end
+    waiting.sort! { |job| job[1].to_i }
+    cant_determine_wait.sort! { |job| job[1].to_i }
 
     # record if an unbroken series of valid end times and value of the latest valid end date across all partitions
     final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !all_end_times_valid
@@ -160,11 +162,11 @@ partitions.each do |partition, details|
       partition_msg << "Insufficient data to estimate job start times\n"
     elsif details[:pending].any?
       partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
-      partition_msg << ": #{waiting.sort.map {|job| job[1] }.join(", ") }" if waiting.any?
+      partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
       partition_msg << "\n"
       if cant_determine_wait.any?
         partition_msg << "Insufficient data to estimate job start times for #{cant_determine_wait.length} job(s)"
-        partition_msg << ": #{cant_determine_wait.sort.map {|job| job[1] }.join(", ") }\n"
+        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }\n"
       end
     end
 
@@ -190,9 +192,9 @@ partitions.each do |partition, details|
   end
   partition_msg << "\n"
 end
-jobs_no_resources.sort!
-total_long_waiting.sort!
-total_cant_determine_wait.sort!
+jobs_no_resources.sort! { |job| job[1].to_i }
+total_long_waiting.sort! { |job| job[1].to_i }
+total_cant_determine_wait.sort! { |job| job[1].to_i }
 
 # nodes and job totals
 msg = ["*#{Time.now.strftime("%F %T")}*\n",
