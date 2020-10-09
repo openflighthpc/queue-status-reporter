@@ -70,7 +70,6 @@ down.uniq!
 
 # determine jobs, their status and partitions
 data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
-total_pending = 0
 total_running = 0
 result = data.split("\n")
 result.shift
@@ -78,12 +77,13 @@ result.each do |job|
   job = job.split(" ").compact
   if job[5] == "PENDING"
     partitions[job[6]][:pending] = partitions[job[6]][:pending] << job
-    total_pending += 1
   elsif job[5] == "RUNNING"
     partitions[job[6]][:running] = partitions[job[6]][:running] << job
     total_running += 1
   end
 end
+
+total_pending = partitions.map { |k,v| v[:pending].map { |x| x[1] } }.flatten.uniq.count
 
 # determine nodes with no jobs in any of their partitions
 no_jobs_in_partitions = []
