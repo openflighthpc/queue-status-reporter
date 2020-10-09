@@ -125,6 +125,7 @@ partitions.each do |partition, details|
     details[:pending].each do |job|
       estimated_start = Time.parse(job[10]) rescue nil
       submit_time = Time.parse(job[7])
+      wait = nil
       if estimated_start
         wait = (estimated_start - submit_time) / 60.0
         wait = nil if wait > (300 * 24 * 60) # ignore jobs slurm decides will take 1 year to start
@@ -135,7 +136,7 @@ partitions.each do |partition, details|
       if wait && wait >= wait_threshold || ((Time.now - submit_time) / 60.0) >= wait_threshold
         waiting << job
         total_long_waiting << job
-      elsif !estimated_start
+      elsif !wait
         cant_determine_wait << job
         total_cant_determine_wait << job
       end
@@ -150,8 +151,8 @@ partitions.each do |partition, details|
       # record if all jobs have valid end time estimates on this partition
       all_end_times_valid = false if !estimated_end
     end
-    waiting.sort! { |job| job[1].to_i }
-    cant_determine_wait.sort! { |job| job[1].to_i }
+    waiting.sort_by! { |job| job[1].to_i }
+    cant_determine_wait.sort_by! { |job| job[1].to_i }
 
     # record if an unbroken series of valid end times and value of the latest valid end date across all partitions
     final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !all_end_times_valid
@@ -186,15 +187,17 @@ partitions.each do |partition, details|
     final_job_end_valid = false
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
     jobs = details[:running] + details[:pending]
+    jobs.sort! { |job| job[1].to_i }
     partition_msg << "Impacts jobs: " if jobs.any?
     partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" if jobs.any?
     jobs_no_resources += jobs
   end
   partition_msg << "\n"
 end
-jobs_no_resources.sort! { |job| job[1].to_i }
-total_long_waiting.sort! { |job| job[1].to_i }
-total_cant_determine_wait.sort! { |job| job[1].to_i }
+jobs_no_resources.sort_by! { |job| job[1].to_i }
+total_long_waiting.sort_by! { |job| job[1].to_i }
+total_cant_determine_wait.sort_by! { |job| job[1].to_i }
+no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
 # nodes and job totals
 msg = ["*#{Time.now.strftime("%F %T")}*\n",
@@ -215,14 +218,15 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "\n\n",
        "#{total_running} total job(s) running\n",
        "#{total_pending} total job(s) pending\n",
-       "#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission",
-       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any?),
-       "\n",
-       ("Insufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any?),
-       (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }\n" if total_cant_determine_wait.any?),
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
        (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any?),
        "\n",
+       ("Insufficient data to estimate job start times" if no_start_data),
+       ("#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission" if !no_start_data),
+       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data),
+       "\n",
+       ("Insufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
+       (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }\n" if total_cant_determine_wait.any? && !no_start_data),
        ("Estimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
        ("Insufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
        (". Last known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
