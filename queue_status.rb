@@ -136,13 +136,16 @@ partitions.each_with_index do |(partition, details), index|
   long_running = []
   details[:running].each do |job|
     start = Time.parse(job[10])
-    if Time.now - start > running_threshold
+    if (Time.now - start) / 60.0 >= running_threshold
       long_running << job
       total_long_running << job
     end
   end
+  long_running.sort! { |job| job[1].to_i }
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
-  partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}\n"
+  partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}"
+  partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }" if long_running.any?
+  partition_msg << "\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
   partition_msg << "#{duplicate_count(all_pending_ids, all_pending_ids[index], index).length} of these pending jobs exist on at least one other partition\n"
   # only calculate times if partition has resources, as otherwise we know jobs are stuck
@@ -231,8 +234,9 @@ partitions.each_with_index do |(partition, details), index|
   end
   partition_msg << "\n"
 end
-jobs_no_resources.uniq! { |job| job[1] }&.sort_by { |job| job[1].to_i }
+jobs_no_resources.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
 total_long_waiting.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
+total_long_running.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
 total_cant_determine_wait.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
@@ -254,7 +258,9 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        (": #{down.join(", ")}" if down.any?),
        "\n\n",
        "#{total_running} total job(s) running\n",
-        "#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}\n",
+       "#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}",
+       (": #{total_long_running.map {|job| job[1] }.join(", ") }" if total_long_running.any?),
+       "\n",
        "#{total_pending} total job(s) pending\n",
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
        (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any? && show_ids),
