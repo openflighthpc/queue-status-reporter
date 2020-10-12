@@ -70,7 +70,6 @@ down.uniq!
 
 # determine jobs, their status and partitions
 data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
-total_pending = 0
 total_running = 0
 result = data.split("\n")
 result.shift
@@ -78,12 +77,13 @@ result.each do |job|
   job = job.split(" ").compact
   if job[5] == "PENDING"
     partitions[job[6]][:pending] = partitions[job[6]][:pending] << job
-    total_pending += 1
   elsif job[5] == "RUNNING"
     partitions[job[6]][:running] = partitions[job[6]][:running] << job
     total_running += 1
   end
 end
+
+total_pending = partitions.map { |k,v| v[:pending].map { |x| x[1] } }.flatten.uniq.count
 
 # determine nodes with no jobs in any of their partitions
 no_jobs_in_partitions = []
@@ -98,6 +98,14 @@ nodes.each do |node, queues|
   end
 end
 
+def duplicate_count(list, part, index)
+  # Return a list of jobs on the given partition where each job exists in at least one other partition
+
+  new = list.dup.tap { |l| l.delete_at(index) } # create copy of partitions list sans the current partition
+  unions = new.map { |p| p & part } # find the union (&) of partition 'part' with each other set in 'new'
+  return unions.reduce(:|) # find the intersection (|) of the unions
+end
+
 # determine jobs per partition
 jobs_no_resources = []
 partition_msg = ""
@@ -105,11 +113,12 @@ total_long_waiting = []
 total_cant_determine_wait = []
 final_job_end = nil
 final_job_end_valid = true
-partitions.each do |partition, details|
+all_pending_ids = partitions.map { |k,v| v[:pending].map { |x| x[1] } }
+partitions.each_with_index do |(partition, details), index|
   partition_msg << "*Partition #{partition}*\n"
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
-
+  partition_msg << "#{duplicate_count(all_pending_ids, all_pending_ids[index], index).length} of these pending jobs exist on at least one other partition\n"
   # only calculate times if partition has resources, as otherwise we know jobs are stuck
   if details[:alive_nodes].any?
     waiting = []
