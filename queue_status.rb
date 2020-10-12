@@ -52,7 +52,7 @@ data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl --dead)
 result = data.split("\n")
 result.shift(2)
 down = []
-result.each do |node|
+result.reverse.each do |node|
   node = node.split(" ").compact
   partition_name = node[2].gsub("*", "")
   node_name = node[0]
@@ -97,40 +97,109 @@ nodes.each do |node, queues|
   end
 end
 
-# determine jobs for partitions with no available resources
+# determine jobs per partition
 jobs_no_resources = []
 partition_msg = ""
 total_long_waiting = []
+total_cant_determine_wait = []
+final_job_end = nil
+final_job_end_valid = true
 partitions.each do |partition, details|
+  partition_msg << "*Partition #{partition}*\n"
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
-  waiting = []
-  details[:pending].each do |job|
-    estimated_start = Time.parse(job[10]) rescue nil
-    if estimated_start
-      wait = (estimated_start - Time.now) / 60.0
-      wait = wait > (300 * 24 * 60) ? nil : wait
-    end
-    wait ||= (Time.now - Time.parse(job[7])) / 60.0
-    if wait >= wait_threshold
-      waiting << job
-      total_long_waiting << job
-    end
-  end
-  partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
-  partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
-  partition_msg << "\n"
 
-  if !details[:alive_nodes].any?
+  # only calculate times if partition has resources, as otherwise we know jobs are stuck
+  if details[:alive_nodes].any?
+    waiting = []
+    cant_determine_wait = []
+    last_job_end_time = nil
+    all_end_times_valid = true
+
+    details[:running].each do |job|
+      estimated_end = Time.parse(job[11]) rescue nil
+      all_end_times_valid = false if !estimated_end
+      last_job_end_time = estimated_end if estimated_end && (!last_job_end_time || last_job_end_time && estimated_end > last_job_end_time)
+    end
+
+    details[:pending].each do |job|
+      estimated_start = Time.parse(job[10]) rescue nil
+      submit_time = Time.parse(job[7])
+      wait = nil
+      if estimated_start
+        wait = (estimated_start - submit_time) / 60.0
+        wait = nil if wait > (300 * 24 * 60) # ignore jobs slurm decides will take 1 year to start
+      end
+
+      # flag job as long waiting if wait exceeds threshold. If no estimated start from slurm, use
+      # time since job was submitted, as could already have been pending for a long period.
+      if wait && wait >= wait_threshold || ((Time.now - submit_time) / 60.0) >= wait_threshold
+        waiting << job
+        total_long_waiting << job
+      elsif !wait
+        cant_determine_wait << job
+        total_cant_determine_wait << job
+      end
+      
+      # determine if a valid end time provided by slurm. If so, use for determining latest valid
+      # job end for jobs on this partition.
+      estimated_end = Time.parse(job[11]) rescue nil
+      if estimated_end
+        estimated_end = nil if estimated_end - Time.now > (300 * 24 * 600) # ignore jobs slurm decides will take 1 year to end
+        last_job_end_time = estimated_end if estimated_end && (!last_job_end_time || last_job_end_time && estimated_end > last_job_end_time)
+      end
+      # record if all jobs have valid end time estimates on this partition
+      all_end_times_valid = false if !estimated_end
+    end
+    waiting.sort_by! { |job| job[1].to_i }
+    cant_determine_wait.sort_by! { |job| job[1].to_i }
+
+    # record if an unbroken series of valid end times and value of the latest valid end date across all partitions
+    final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !all_end_times_valid
+    final_job_end = last_job_end_time if last_job_end_time && (!final_job_end || last_job_end_time > final_job_end)
+
+    # show if jobs with unknown start times for this partition
+    if cant_determine_wait.length > 0 && cant_determine_wait.length == details[:pending].length
+      partition_msg << "Insufficient data to estimate job start times\n"
+    elsif details[:pending].any?
+      partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
+      partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
+      partition_msg << "\n"
+      if cant_determine_wait.any?
+        partition_msg << "Insufficient data to estimate job start times for #{cant_determine_wait.length} job(s)"
+        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }\n"
+      end
+    end
+
+    # show estimated end of current jobs, or latest value available
+    if details[:pending].any? || details[:running].any?
+      if all_end_times_valid
+        partition_msg << "Estimated time all jobs completed: #{last_job_end_time}\n" 
+      else
+        partition_msg << "Insufficient data to estimate time all jobs completed"
+        partition_msg << ". Latest known end time: #{last_job_end_time}" if last_job_end_time
+        partition_msg << "\n"
+      end
+    end
+
+  # highlight jobs with no resources
+  else
+    final_job_end_valid = false
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
     jobs = details[:running] + details[:pending]
+    jobs.sort! { |job| job[1].to_i }
     partition_msg << "Impacts jobs: " if jobs.any?
     partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" if jobs.any?
     jobs_no_resources += jobs
   end
   partition_msg << "\n"
 end
+jobs_no_resources.sort_by! { |job| job[1].to_i }
+total_long_waiting.sort_by! { |job| job[1].to_i }
+total_cant_determine_wait.sort_by! { |job| job[1].to_i }
+no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
+# nodes and job totals
 msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "#{allocated.length} node(s) are allocated",
        (": #{allocated.join(", ")}" if allocated.any?),
@@ -149,11 +218,18 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "\n\n",
        "#{total_running} total job(s) running\n",
        "#{total_pending} total job(s) pending\n",
-       "#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission",
-       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any?),
-       "\n",
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
        (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any?),
+       "\n",
+       ("Insufficient data to estimate job start times" if no_start_data),
+       ("#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission" if !no_start_data),
+       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data),
+       "\n",
+       ("Insufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
+       (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }\n" if total_cant_determine_wait.any? && !no_start_data),
+       ("Estimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
+       ("Insufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
+       (". Last known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
        "\n\n",
        partition_msg
 ].compact
