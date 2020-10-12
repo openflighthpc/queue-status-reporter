@@ -114,7 +114,7 @@ nodes.each do |node, queues|
   end
 end
 
-def duplicate_count(list, part, index)
+def duplicates(list, part, index)
   # Return a list of jobs on the given partition where each job exists in at least one other partition
 
   new = list.dup.tap { |l| l.delete_at(index) } # create copy of partitions list sans the current partition
@@ -141,13 +141,14 @@ partitions.each_with_index do |(partition, details), index|
       total_long_running << job
     end
   end
-  long_running.sort! { |job| job[1].to_i }
+  long_running.sort_by! { |job| job[1] }
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
-  partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}"
+  partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}" if details[:running].any? 
   partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }" if long_running.any?
-  partition_msg << "\n"
+  partition_msg << "\n" if details[:running].any? 
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
-  partition_msg << "#{duplicate_count(all_pending_ids, all_pending_ids[index], index).length} of these pending jobs exist on at least one other partition\n"
+  duplicate_count = duplicates(all_pending_ids, all_pending_ids[index], index).length
+  partition_msg << "#{duplicate_count} of these pending jobs exist on at least one other partition\n" if duplicate_count > 0
   # only calculate times if partition has resources, as otherwise we know jobs are stuck
   if details[:alive_nodes].any?
     waiting = []
@@ -190,8 +191,8 @@ partitions.each_with_index do |(partition, details), index|
       # record if all jobs have valid end time estimates on this partition
       all_end_times_valid = false if !estimated_end
     end
-    waiting.sort_by! { |job| job[1].to_i }
-    cant_determine_wait.sort_by! { |job| job[1].to_i }
+    waiting.sort_by! { |job| job[1] }
+    cant_determine_wait.sort_by! { |job| job[1] }
 
     # record if an unbroken series of valid end times and value of the latest valid end date across all partitions
     final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !all_end_times_valid
@@ -234,10 +235,14 @@ partitions.each_with_index do |(partition, details), index|
   end
   partition_msg << "\n"
 end
-jobs_no_resources.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
-total_long_waiting.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
-total_long_running.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
-total_cant_determine_wait.uniq! { |job| job[1] }&.sort_by! { |job| job[1].to_i }
+jobs_no_resources.uniq! { |job| job[1] }
+total_long_waiting.uniq! { |job| job[1] }
+total_long_running.uniq! { |job| job[1] }
+total_cant_determine_wait.uniq! { |job| job[1] }
+jobs_no_resources.sort_by! { |job| job[1] }
+total_long_waiting.sort_by! { |job| job[1] }
+total_long_running.sort_by! { |job| job[1] }
+total_cant_determine_wait.sort_by! { |job| job[1] }
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
 # nodes and job totals
@@ -258,9 +263,9 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        (": #{down.join(", ")}" if down.any?),
        "\n\n",
        "#{total_running} total job(s) running\n",
-       "#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}",
+       ("#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}" if total_running > 0),
        (": #{total_long_running.map {|job| job[1] }.join(", ") }" if total_long_running.any?),
-       "\n",
+       ("\n" if total_running > 0),
        "#{total_pending} total job(s) pending\n",
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
        (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any? && show_ids),
