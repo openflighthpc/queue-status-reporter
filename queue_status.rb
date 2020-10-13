@@ -6,15 +6,29 @@ def send_slack_message(msg)
 end
 
 def wait_threshold
-  ENV['WAIT_THRESHOLD'] || 720
+  (ENV['WAIT_THRESHOLD'] || 720).to_i
 end
 
-def wait_threshold_hours
-  wait_threshold.divmod(60)[0]
+def running_threshold
+  (ENV['RUN_THRESHOLD'] || 10080).to_i
 end
 
-def wait_threshold_mins
-  wait_threshold.divmod(60)[1]
+def formatted_threshold(value)
+  result = ""
+  if value >= 1440
+    result << "#{value.divmod(1440)[0]}day"
+    result << "s" if value >= 2880
+    result << " "
+    value = value.divmod(1440)[1]
+  end
+  if value >= 60
+    result << "#{value.divmod(60)[0]}hr"
+    result << "s" if value >= 120
+    result << " "
+    value = value.divmod(60)[1]
+  end
+  result << "#{value}m" if value > 0
+  result.strip
 end
 
 show_ids = ARGV.include?("ids")
@@ -100,7 +114,7 @@ nodes.each do |node, queues|
   end
 end
 
-def duplicate_count(list, part, index)
+def duplicates(list, part, index)
   # Return a list of jobs on the given partition where each job exists in at least one other partition
 
   new = list.dup.tap { |l| l.delete_at(index) } # create copy of partitions list sans the current partition
@@ -112,15 +126,31 @@ end
 jobs_no_resources = []
 partition_msg = ""
 total_long_waiting = []
+total_long_running = []
 total_cant_determine_wait = []
 final_job_end = nil
 final_job_end_valid = true
 all_pending_ids = partitions.map { |k,v| v[:pending].map { |x| x[1] } }
 partitions.each_with_index do |(partition, details), index|
   partition_msg << "*Partition #{partition}*\n"
+  long_running = []
+  details[:running].each do |job|
+    start = Time.parse(job[10])
+    if (Time.now - start) / 60.0 >= running_threshold
+      long_running << job
+      total_long_running << job
+    end
+  end
+  long_running.sort_by! { |job| job[1] }
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
+  if details[:running].any?
+    partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}"
+    partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }" if long_running.any? && show_ids
+    partition_msg << "\n"
+  end
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
-  partition_msg << "#{duplicate_count(all_pending_ids, all_pending_ids[index], index).length} of these pending jobs exist on at least one other partition\n"
+  duplicate_count = duplicates(all_pending_ids, all_pending_ids[index], index).length
+  partition_msg << "#{duplicate_count} of these pending jobs exist on at least one other partition\n" if duplicate_count > 0
   # only calculate times if partition has resources, as otherwise we know jobs are stuck
   if details[:alive_nodes].any?
     waiting = []
@@ -163,8 +193,8 @@ partitions.each_with_index do |(partition, details), index|
       # record if all jobs have valid end time estimates on this partition
       all_end_times_valid = false if !estimated_end
     end
-    waiting.sort_by! { |job| job[1].to_i }
-    cant_determine_wait.sort_by! { |job| job[1].to_i }
+    waiting.sort_by! { |job| job[1] }
+    cant_determine_wait.sort_by! { |job| job[1] }
 
     # record if an unbroken series of valid end times and value of the latest valid end date across all partitions
     final_job_end_valid = false if (details[:pending].any? || details[:running].any?) && !all_end_times_valid
@@ -174,7 +204,7 @@ partitions.each_with_index do |(partition, details), index|
     if cant_determine_wait.length > 0 && cant_determine_wait.length == details[:pending].length
       partition_msg << "Insufficient data to estimate job start times\n"
     elsif details[:pending].any?
-      partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
+      partition_msg << "#{waiting.length} job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission"
       partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any? && show_ids
       partition_msg << "\n"
       if cant_determine_wait.any?
@@ -201,15 +231,20 @@ partitions.each_with_index do |(partition, details), index|
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
     jobs = details[:running] + details[:pending]
     jobs.sort! { |job| job[1].to_i }
-    partition_msg << "Impacts jobs: " if jobs.any? && show_ids
-    partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" if jobs.any? && show_ids
+    if jobs.any? && show_ids
+      partition_msg << "Impacts jobs: " if jobs.any? && show_ids
+      partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" 
+      partition_msg << "\n"
+    end
     jobs_no_resources += jobs
   end
   partition_msg << "\n"
 end
-jobs_no_resources.sort_by! { |job| job[1].to_i }
-total_long_waiting.sort_by! { |job| job[1].to_i }
-total_cant_determine_wait.sort_by! { |job| job[1].to_i }
+
+[jobs_no_resources, total_long_waiting, total_long_running, total_cant_determine_wait].each do |list|
+  list.uniq! { |job| job[1] }
+  list.sort_by! { |job| job[1] }
+end
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
 # nodes and job totals
@@ -230,12 +265,15 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        (": #{down.join(", ")}" if down.any?),
        "\n\n",
        "#{total_running} total job(s) running\n",
+       ("#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}" if total_running > 0),
+       (": #{total_long_running.map {|job| job[1] }.join(", ") }" if total_long_running.any? && show_ids),
+       ("\n" if total_running > 0),
        "#{total_pending} total job(s) pending\n",
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
        (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any? && show_ids),
        "\n",
        ("Insufficient data to estimate job start times" if no_start_data),
-       ("#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission" if !no_start_data),
+       ("#{total_long_waiting.length} total job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission" if !no_start_data),
        (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data && show_ids),
        ("\nInsufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
        (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }" if total_cant_determine_wait.any? && !no_start_data && show_ids),
