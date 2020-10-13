@@ -242,7 +242,7 @@ partitions.each_with_index do |(partition, details), index|
 end
 
 [jobs_no_resources, total_long_waiting, total_long_running, total_cant_determine_wait].each do |list|
-  list.uniq!
+  list.uniq! { |job| job[1] }
   list.sort_by! { |job| job[1] }
 end
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
