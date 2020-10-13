@@ -17,6 +17,8 @@ def wait_threshold_mins
   wait_threshold.divmod(60)[1]
 end
 
+show_ids = ARGV.include?("ids")
+
 # determine partitions
 partitions = {}
 data = %x(/opt/flight/opt/slurm/bin/sinfo p)
@@ -173,11 +175,12 @@ partitions.each_with_index do |(partition, details), index|
       partition_msg << "Insufficient data to estimate job start times\n"
     elsif details[:pending].any?
       partition_msg << "#{waiting.length} job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission"
-      partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any?
+      partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any? && show_ids
       partition_msg << "\n"
       if cant_determine_wait.any?
         partition_msg << "Insufficient data to estimate job start times for #{cant_determine_wait.length} job(s)"
-        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }\n"
+        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }" if show_ids
+        partition_msg << "\n"
       end
     end
 
@@ -198,8 +201,8 @@ partitions.each_with_index do |(partition, details), index|
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
     jobs = details[:running] + details[:pending]
     jobs.sort! { |job| job[1].to_i }
-    partition_msg << "Impacts jobs: " if jobs.any?
-    partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" if jobs.any?
+    partition_msg << "Impacts jobs: " if jobs.any? && show_ids
+    partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" if jobs.any? && show_ids
     jobs_no_resources += jobs
   end
   partition_msg << "\n"
@@ -229,17 +232,16 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "#{total_running} total job(s) running\n",
        "#{total_pending} total job(s) pending\n",
        "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
-       (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any?),
+       (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any? && show_ids),
        "\n",
        ("Insufficient data to estimate job start times" if no_start_data),
        ("#{total_long_waiting.length} total job(s) estimated not to start within #{wait_threshold_hours}hrs #{wait_threshold_mins}m after submission" if !no_start_data),
-       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data),
-       "\n",
-       ("Insufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
-       (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }\n" if total_cant_determine_wait.any? && !no_start_data),
-       ("Estimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
-       ("Insufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
-       (". Last known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
+       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data && show_ids),
+       ("\nInsufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
+       (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }" if total_cant_determine_wait.any? && !no_start_data && show_ids),
+       ("\nEstimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
+       ("\nInsufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
+       (". Latest known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
        "\n\n",
        partition_msg
 ].compact
