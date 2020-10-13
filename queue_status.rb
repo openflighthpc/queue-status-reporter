@@ -241,7 +241,7 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
        (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }" if total_cant_determine_wait.any? && !no_start_data && show_ids),
        ("\nEstimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
        ("\nInsufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
-       (". Last known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
+       (". Latest known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
        "\n\n",
        partition_msg
 ].compact
