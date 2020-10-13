@@ -143,9 +143,11 @@ partitions.each_with_index do |(partition, details), index|
   end
   long_running.sort_by! { |job| job[1] }
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
-  partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}" if details[:running].any? 
-  partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }" if long_running.any?
-  partition_msg << "\n" if details[:running].any? 
+  if details[:running].any?
+    partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}"
+    partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }" if long_running.any?
+    partition_msg << "\n"
+  end
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
   duplicate_count = duplicates(all_pending_ids, all_pending_ids[index], index).length
   partition_msg << "#{duplicate_count} of these pending jobs exist on at least one other partition\n" if duplicate_count > 0
@@ -235,14 +237,11 @@ partitions.each_with_index do |(partition, details), index|
   end
   partition_msg << "\n"
 end
-jobs_no_resources.uniq! { |job| job[1] }
-total_long_waiting.uniq! { |job| job[1] }
-total_long_running.uniq! { |job| job[1] }
-total_cant_determine_wait.uniq! { |job| job[1] }
-jobs_no_resources.sort_by! { |job| job[1] }
-total_long_waiting.sort_by! { |job| job[1] }
-total_long_running.sort_by! { |job| job[1] }
-total_cant_determine_wait.sort_by! { |job| job[1] }
+
+[jobs_no_resources, total_long_waiting, total_long_running, total_cant_determine_wait].each do |list|
+  list.uniq!
+  list.sort_by! { |job| job[1] }
+end
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
 # nodes and job totals
