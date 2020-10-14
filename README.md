@@ -38,10 +38,10 @@ By default, `WAIT_THRESHOLD` is set to 720 minutes (12 hours) and `RUN_THRESHOLD
 
 ## Operation
 
-The application has a single entrypoint, with three optional parameters to be specified at execution. The information that will be returned will resemble the following:
+The application has a single entrypoint, `ruby queue_status.rb`, with three optional parameters to be specified at execution. The information that will be returned will resemble the following:
 
 ```
-2020-10-13 15:20:38
+2020-10-13 12:00:00
 2 node(s) are allocated: node01, node02
 0 node(s) are idle
 0 node(s) are mixed (some CPUs in use, some idle)
