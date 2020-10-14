@@ -22,7 +22,7 @@ bundle install
 ### Slack
 
 This application has the functionality to post any report outputs to Slack, as well as the command line.
-To use this function, a Slack bot must be created in the desired recipient server. The bot's API token should then be set as an environment variable on the system running this application:
+To use this function, a [Slack bot](https://slack.com/apps/A0F7YS25R-bots) must be created in the desired recipient server. The bot's API token should then be set as an environment variable on the system running this application:
 
 `SLACK_TOKEN=yourtoken ruby -e 'p ENV["SLACK_TOKEN"]'`
 
