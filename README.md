@@ -79,7 +79,21 @@ Insufficient data to estimate time all jobs completed
 
 ```
 
+### Glossary
+
+|      Term | Description                                            |
+|----------:|--------------------------------------------------------|
+| Allocated | This node is currently running a job                   |
+| Down      | This node is switched off                              |
+| Idle      | This node is doing nothing and is free to accept a job |
+| Pending   | This job is in a queue, waiting to be accepted         |
+| Mixed     | This node has some CPUs in use, and some not.          |
+
+### Start/end prediction
+
 In order for the row containing `Insufficient data to estimate job start times` to display accurate data, appropriate details should be used when submitting the job to SLURM. Specifying a `--time` flag on as many jobs/partitions as possible will increase the accuracy of the estimated job start times. Similarly, the `Insufficient data to estimate time all jobs completed` row will be affected by the `--time` flag, although some estimation (however inaccurate) is still possible.
+
+### Command line arguments
 
 The three optional command line arguments are as follows:
 
@@ -87,7 +101,7 @@ The three optional command line arguments are as follows:
 `slack` - If included, the application will only send the output to Slack.
 `text` - If included, the application will only print the output to the command line, ignoring any Slack specifications.
 
-Note: if neither `slack` nor `text` are specified at execution, the output will be posted to both the command line and the specified Slack channel.
+Please note that if neither `slack` nor `text` are specified at execution, the application will execute as if both were specified.
 
 # Contributing
 
