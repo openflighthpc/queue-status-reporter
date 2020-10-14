@@ -97,9 +97,9 @@ In order for the row containing `Insufficient data to estimate job start times` 
 
 The three optional command line arguments are as follows:
 
-`ids` - If included, the application will display job IDs for rows that describe individual jobs.
-`slack` - If included, the application will only send the output to Slack.
-`text` - If included, the application will only print the output to the command line, ignoring any Slack specifications.
+`ids` - If included, the application will display job IDs for rows that describe individual jobs.\
+`slack` - If included, the application will only send the output to Slack.\
+`text` - If included, the application will only print the output to the command line, ignoring any Slack specifications.\
 
 Please note that if neither `slack` nor `text` are specified at execution, the application will execute as if both were specified.
 
