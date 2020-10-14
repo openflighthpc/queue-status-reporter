@@ -81,6 +81,14 @@ Insufficient data to estimate time all jobs completed
 
 In order for the row containing `Insufficient data to estimate job start times` to display accurate data, appropriate details should be used when submitting the job to SLURM. Specifying a `--time` flag on as many jobs/partitions as possible will increase the accuracy of the estimated job start times. Similarly, the `Insufficient data to estimate time all jobs completed` row will be affected by the `--time` flag, although some estimation (however inaccurate) is still possible.
 
+The three optional command line arguments are as follows:
+
+`ids` - If included, the application will display job IDs for rows that describe individual jobs.
+`slack` - If included, the application will only send the output to Slack.
+`text` - If included, the application will only print the output to the command line, ignoring any Slack specifications.
+
+Note: if neither `slack` nor `text` are specified at execution, the output will be posted to both the command line and the specified Slack channel.
+
 # Contributing
 
 Fork the project. Make your feature addition or bug fix. Send a pull
