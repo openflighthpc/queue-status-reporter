@@ -227,7 +227,6 @@ partitions.each_with_index do |(partition, details), index|
 
   # highlight jobs with no resources
   else
-    final_job_end_valid = false
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
     jobs = details[:running] + details[:pending]
     jobs.sort! { |job| job[1].to_i }
