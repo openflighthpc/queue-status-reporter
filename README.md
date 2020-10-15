@@ -93,6 +93,17 @@ Insufficient data to estimate time all jobs completed
 
 In order for the row containing `Insufficient data to estimate job start times` to display accurate data, appropriate details should be used when submitting the job to SLURM. Specifying a `--time` flag on as many jobs/partitions as possible will increase the accuracy of the estimated job start times. Similarly, the `Insufficient data to estimate time all jobs completed` row will be affected by the `--time` flag, although some estimation (however inaccurate) is still possible.
 
+The following is an example of the output when every job has a `--time` specified:
+
+```
+1 total job(s) running
+0 total job(s) have been running for more than 7days
+2 total job(s) pending
+0 total job(s) with no available resources
+0 total job(s) estimated not to start within 12hrs after submission
+Estimated time all jobs completed: 2020-10-15 15:21:00 +0100
+```
+
 ### Command line arguments
 
 The three optional command line arguments are as follows:
