@@ -29,7 +29,7 @@ require 'time'
 require 'httparty'
 
 def send_slack_message(msg)
-  HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": "tim-test", "as_user": true})
+  HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": ENV['SLACK_CHANNEL'], "as_user": true})
 end
 
 def wait_threshold
