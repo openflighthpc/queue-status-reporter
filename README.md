@@ -26,7 +26,7 @@ To use this function, a [Slack bot](https://slack.com/apps/A0F7YS25R-bots) must 
 
 `SLACK_TOKEN=yourtoken ruby -e 'p ENV["SLACK_TOKEN"]'`
 
-The created bot must be a member of the Slack channel you wish to post it in.
+The Slack channel you wish to post to must be set as the environment variable `SLACK_CHANNEL`. The created bot must be a member of this Slack channel.
 
 ### Thresholds
 
