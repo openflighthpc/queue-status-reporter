@@ -62,13 +62,13 @@ show_ids = ARGV.include?("ids")
 
 # determine partitions
 partitions = {}
-data = %x(/opt/flight/opt/slurm/bin/sinfo p)
+data = %x(sinfo p)
 result = data.gsub("*", "").split("\n")
 result.shift
 result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: []} }
 
 # determine nodes, their status and their partitions
-data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl)
+data = %x(sinfo -Nl)
 result = data.split("\n")
 result.shift(2)
 nodes = {}
@@ -91,7 +91,7 @@ result.each do |node|
 end
 
 # determine unresponsive nodes
-data = %x(/opt/flight/opt/slurm/bin/sinfo -Nl --dead)
+data = %x(sinfo -Nl --dead)
 result = data.split("\n")
 result.shift(2)
 down = []
@@ -112,7 +112,7 @@ mixed.uniq!
 down.uniq!
 
 # determine jobs, their status and partitions
-data =  %x(/opt/flight/opt/slurm/bin/squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
+data =  %x(squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
 total_running = 0
 result = data.split("\n")
 result.shift
