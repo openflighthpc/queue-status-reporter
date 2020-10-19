@@ -19,6 +19,10 @@ bundle install
 
 ## Configuration
 
+### PATH environment
+
+This application assumes that your instance of SLURM is set up properly in your PATH environment variable(s). Please ensure that SLURM is accessible by name at the command line (e.g. `sinfo -Nl` should return a list of all nodes and partitions).
+
 ### Slack
 
 This application has the functionality to post any report outputs to Slack, as well as the command line.
