@@ -86,10 +86,12 @@ def node_details
   idle = []
   allocated = []
   mixed = []
+  down = []
   split_data.each do |node|
     node = node.split(" ").compact
     partition_name = node[2].gsub("*", "")
     node_name = node[0]
+    node_status = node[-1] == 'responding' ? 'dead' : 'alive'
 
     # merge nodes with new node info,
     # creating a new array if the key doesn't exist
@@ -99,24 +101,32 @@ def node_details
       oldval | newval
     end
 
-    if node[3] == 'idle'
-      idle << node_name
-    elsif node[3] == 'allocated' || node[3].include?('comp')
-      allocated << node_name
-    elsif node[3] == 'mixed'
-      mixed << node_name
+    if node_status == 'alive'
+      if node[3] == 'idle'
+        idle << node_name
+      elsif node[3] == 'allocated' || node[3].include?('comp')
+        allocated << node_name
+      elsif node[3] == 'mixed'
+        mixed << node_name
+      end
+    else
+      down << node_name
     end
 
   end
-  [nodes, idle, allocated, mixed]
+  [nodes, idle, allocated, mixed, down].map(&:uniq)
 end
 
-def populate_partitions_hash(partitions,nodes)
+def populate_partitions_hash(partitions,nodes,down)
   # modify partitions parameter inplace
   partitions.tap do |partitions_hash|
     nodes.each do |node, parts|
       parts.each do |p|
-        partitions_hash[p][:alive_nodes].append(node).uniq
+        if down.include?(node)
+          partitions_hash[p][:dead_nodes].append(node).uniq
+        else
+          partitions_hash[p][:alive_nodes].append(node).uniq
+        end
       end
     end
   end
@@ -139,31 +149,10 @@ user_args = Hash[ ARGV.join(' ').scan(/([^=\s]+)(?:=(\S+))?/) ]
 partitions = gather_partitions
 
 # Determine node names, statuses, and their partitions
-nodes, idle, allocated, mixed = node_details
+nodes, idle, allocated, mixed, down = node_details
 
 # Populate partitions hash with new node data
-populate_partitions_hash(partitions,nodes)
-
-# determine unresponsive nodes
-data = %x(sinfo -Nl --dead)
-result = data.split("\n")
-result.shift(2)
-down = []
-result.reverse.each do |node|
-  node = node.split(" ").compact
-  partition_name = node[2].gsub("*", "")
-  node_name = node[0]
-  down << node_name
-  alive = partitions[partition_name][:alive_nodes]
-  alive.delete(node_name)
-  partitions[partition_name][:alive_nodes] = alive
-  partitions[partition_name][:dead_nodes] = partitions[partition_name][:dead_nodes] << node_name
-end
-
-idle.uniq!
-allocated.uniq!
-mixed.uniq!
-down.uniq!
+populate_partitions_hash(partitions,nodes,down)
 
 # determine jobs, their status and partitions
 data =  %x(squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
