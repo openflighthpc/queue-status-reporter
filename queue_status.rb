@@ -58,7 +58,14 @@ def formatted_threshold(value)
   result.strip
 end
 
-show_ids = ARGV.include?("ids")
+# Construct a hash to store command line arguments.
+# This implementation allows for arguments of the form:
+# ruby queue_status.rb show_ids another_var=not_true
+# Simple boolean arguments are referenced with:
+# user_args.key?('arg_name')
+# Arguments with defined values (currently none) are referenced with:
+# user_args['arg_name']
+user_args = Hash[ ARGV.join(' ').scan(/([^=\s]+)(?:=(\S+))?/) ]
 
 # determine partitions
 partitions = {}
@@ -172,7 +179,9 @@ partitions.each_with_index do |(partition, details), index|
   partition_msg << "#{details[:running].length} job(s) running on partition #{partition}\n"
   if details[:running].any?
     partition_msg << "#{long_running.length} job(s) have been running for more than #{formatted_threshold(running_threshold)}"
-    partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }" if long_running.any? && show_ids
+    if long_running.any? && user_args.key?('show_ids')
+      partition_msg << ": #{long_running.map {|job| job[1] }.join(", ") }"
+    end
     partition_msg << "\n"
   end
   partition_msg << "#{details[:pending].length} job(s) pending on partition #{partition}\n"
@@ -232,11 +241,13 @@ partitions.each_with_index do |(partition, details), index|
       partition_msg << "Insufficient data to estimate job start times\n"
     elsif details[:pending].any?
       partition_msg << "#{waiting.length} job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission"
-      partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }" if waiting.any? && show_ids
+      if waiting.any? && user_args.key?('show_ids')
+        partition_msg << ": #{waiting.map {|job| job[1] }.join(", ") }"
+      end
       partition_msg << "\n"
       if cant_determine_wait.any?
         partition_msg << "Insufficient data to estimate job start times for #{cant_determine_wait.length} job(s)"
-        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }" if show_ids
+        partition_msg << ": #{cant_determine_wait.map {|job| job[1] }.join(", ") }" if user_args.key?('show_ids')
         partition_msg << "\n"
       end
     end
@@ -258,8 +269,8 @@ partitions.each_with_index do |(partition, details), index|
     partition_msg << ":awooga:Partition #{partition} has no available resources:awooga:\n"
     jobs = details[:running] + details[:pending]
     jobs.sort! { |job| job[1].to_i }
-    if jobs.any? && show_ids
-      partition_msg << "Impacts jobs: " if jobs.any? && show_ids
+    if jobs.any? && user_args.key?('show_ids')
+      partition_msg << "Impacts jobs: "
       partition_msg << "#{jobs.map { |job| job[1] }.join(", ") }" 
       partition_msg << "\n"
     end
@@ -275,6 +286,7 @@ end
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
 # nodes and job totals
+# GETTING REVAMPED; CONDITIONALS LEFT ALONE FOR NOW :tm
 msg = ["*#{Time.now.strftime("%F %T")}*\n",
        "#{allocated.length} node(s) are allocated",
        (": #{allocated.join(", ")}" if allocated.any?),
@@ -312,11 +324,8 @@ msg = ["*#{Time.now.strftime("%F %T")}*\n",
 ].compact
 
 msg = msg.join("")
-slack = ARGV.include?("slack")
-text = ARGV.include?("text")
-if !slack && !text
-  slack = true
-  text = true
-end
-puts msg.gsub("*", "").gsub(":awooga:", "")  if text
-send_slack_message(msg) if slack
+slack = user_args.key?('slack')
+text = user_args.key?('text')
+both = !(slack || text)
+puts msg.gsub("*", "").gsub(":awooga:", "")  if both || text
+send_slack_message(msg) if both || slack
