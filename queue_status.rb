@@ -64,7 +64,7 @@ def gather_partitions
   # disregard header row,
   # create and populate hash with one key per row in command line data
   data = %x(sinfo p)
-  split_data = data.gsub("*"), "").split("\n")[1..-1]
+  split_data = data.gsub("*", "").split("\n")[1..-1]
 
   {}.tap do |h|
     split_data.each do |part|
@@ -79,40 +79,70 @@ def gather_partitions
   end
 end
 
+def node_details
+  data = %x(sinfo -Nl)
+  split_data = data.split("\n")[2..-1]
+  nodes = {}
+  idle = []
+  allocated = []
+  mixed = []
+  split_data.each do |node|
+    node = node.split(" ").compact
+    partition_name = node[2].gsub("*", "")
+    node_name = node[0]
+
+    # merge nodes with new node info,
+    # creating a new array if the key doesn't exist
+    # and ignoring duplicate elements in the arrays
+    nodes[node_name] ||= Array.new
+    nodes.merge!({ node_name => [partition_name] }) do |key, oldval, newval|
+      oldval | newval
+    end
+
+    if node[3] == 'idle'
+      idle << node_name
+    elsif node[3] == 'allocated' || node[3].include?('comp')
+      allocated << node_name
+    elsif node[3] == 'mixed'
+      mixed << node_name
+    end
+
+  end
+  [nodes, idle, allocated, mixed]
+end
+
+def populate_partitions_hash(partitions,nodes)
+  # modify partitions parameter inplace
+  partitions.tap do |partitions_hash|
+    nodes.each do |node, parts|
+      parts.each do |p|
+        partitions_hash[p][:alive_nodes].append(node).uniq
+      end
+    end
+  end
+end
+
 # Construct a hash to store command line arguments.
+#
 # This implementation allows for arguments of the form:
 # ruby queue_status.rb show_ids another_var=not_true
+#
 # Simple boolean arguments are referenced with:
 # user_args.key?('arg_name')
+#
 # Arguments with defined values (currently none) are referenced with:
 # user_args['arg_name']
+#
 user_args = Hash[ ARGV.join(' ').scan(/([^=\s]+)(?:=(\S+))?/) ]
 
 # Determine partitions
 partitions = gather_partitions
 
-# determine nodes, their status and their partitions
-data = %x(sinfo -Nl)
-result = data.split("\n")
-result.shift(2)
-nodes = {}
-idle = []
-allocated = []
-mixed = []
-result.each do |node|
-  node = node.split(" ").compact
-  partition_name = node[2].gsub("*", "")
-  node_name = node[0]
-  if nodes.has_key?(node_name)
-    nodes[node_name] = nodes[node_name] << partition_name
-  else
-    nodes[node_name] = [partition_name]
-  end
-  partitions[partition_name][:alive_nodes] = (partitions[partition_name][:alive_nodes] << node_name).uniq
-  idle << node_name if node[3] == "idle"
-  allocated << node_name if (node[3] == "allocated" || node[3].include?("comp"))
-  mixed << node_name if node[3] == "mixed"
-end
+# Determine node names, statuses, and their partitions
+nodes, idle, allocated, mixed = node_details
+
+# Populate partitions hash with new node data
+populate_partitions_hash(partitions,nodes)
 
 # determine unresponsive nodes
 data = %x(sinfo -Nl --dead)
