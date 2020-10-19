@@ -59,6 +59,26 @@ def humanise_seconds(mins)
   end.compact.reverse.join(' ')
 end
 
+def gather_partitions
+  # parse raw output from `sinfo p`,
+  # disregard header row,
+  # create and populate hash with one key per row in command line data
+  data = %x(sinfo p)
+  split_data = data.gsub("*"), "").split("\n")[1..-1]
+
+  {}.tap do |h|
+    split_data.each do |part|
+      row = part.split(" ")
+      h[row[0]] = {
+        running: [],
+        pending: [],
+        alive_nodes: [],
+        dead_nodes: []
+      }
+    end
+  end
+end
+
 # Construct a hash to store command line arguments.
 # This implementation allows for arguments of the form:
 # ruby queue_status.rb show_ids another_var=not_true
@@ -68,12 +88,8 @@ end
 # user_args['arg_name']
 user_args = Hash[ ARGV.join(' ').scan(/([^=\s]+)(?:=(\S+))?/) ]
 
-# determine partitions
-partitions = {}
-data = %x(sinfo p)
-result = data.gsub("*", "").split("\n")
-result.shift
-result.each { |partition| partitions[partition.split(" ")[0]] = {running: [], pending: [], alive_nodes: [], dead_nodes: []} }
+# Determine partitions
+partitions = gather_partitions
 
 # determine nodes, their status and their partitions
 data = %x(sinfo -Nl)
