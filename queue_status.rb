@@ -27,17 +27,27 @@
 
 require 'time'
 require 'httparty'
+require 'yaml'
 
 def send_slack_message(msg)
-  HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": ENV['SLACK_CHANNEL'], "as_user": true})
+  response = HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{slack_token}"}, body: {"text": msg, "channel": slack_channel, "as_user": true})
+  puts "Error sending slack message. Reason: #{response["error"]}" if response["ok"] == false
 end
 
 def wait_threshold
-  (ENV['WAIT_THRESHOLD'] || 720).to_i
+  (ENV['WAIT_THRESHOLD'] || @config['WAIT_THRESHOLD'] || 720).to_i
 end
 
 def running_threshold
-  (ENV['RUN_THRESHOLD'] || 10080).to_i
+  (ENV['RUN_THRESHOLD'] || @config['RUN_THRESHOLD'] || 10080).to_i
+end
+
+def slack_token
+  ENV['SLACK_TOKEN'] || @config['SLACK_TOKEN']
+end
+
+def slack_channel
+  ENV['SLACK_CHANNEL'] || @config['SLACK_CHANNEL']
 end
 
 def formatted_threshold(value)
@@ -58,6 +68,7 @@ def formatted_threshold(value)
   result.strip
 end
 
+@config = YAML.load(File.read("config.yml"))
 show_ids = ARGV.include?("ids")
 
 # determine partitions
