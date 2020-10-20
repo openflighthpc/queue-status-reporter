@@ -132,6 +132,24 @@ def populate_partitions_hash(partitions,nodes,down)
   end
 end
 
+def gather_job_details(partitions)
+  data = %x(squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
+  total_running = 0
+  split_data = data.split("\n")[1..-1]
+  partitions.tap do |h|
+    split_data.each do |row|
+      job = row.split(" ").compact
+      if job[5] == "PENDING"
+        h[job[6]][:pending].append(job)
+      elsif job[5] == "RUNNING"
+        h[job[6]][:running].append(job)
+        total_running += 1
+      end
+    end
+  end
+  total_running
+end
+
 # Construct a hash to store command line arguments.
 #
 # This implementation allows for arguments of the form:
@@ -154,21 +172,8 @@ nodes, idle, allocated, mixed, down = node_details
 # Populate partitions hash with new node data
 populate_partitions_hash(partitions,nodes,down)
 
-# determine jobs, their status and partitions
-data =  %x(squeue -o '%j %A %D %c %m %T %P %V %L %l %S %e %r' --priority)
-total_running = 0
-result = data.split("\n")
-result.shift
-result.each do |job|
-  job = job.split(" ").compact
-  if job[5] == "PENDING"
-    partitions[job[6]][:pending] = partitions[job[6]][:pending] << job
-  elsif job[5] == "RUNNING"
-    partitions[job[6]][:running] = partitions[job[6]][:running] << job
-    total_running += 1
-  end
-end
-
+# Determine jobs, their status, and partitions
+total_running = gather_job_details(partitions)
 total_pending = partitions.map { |k,v| v[:pending].map { |x| x[1] } }.flatten.uniq.count
 
 # determine nodes with no jobs in any of their partitions
