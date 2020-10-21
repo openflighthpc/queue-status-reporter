@@ -339,6 +339,9 @@ else
          "\n",
          "#{total_pending} total job(s) pending",
          (" (#{total_long_waiting.length} total job(s) not estimated to start within #{formatted_threshold(wait_threshold)} after submission)"),
+         ("\nEstimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
+         ("\nInsufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
+         (". Latest known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
          "\n\n",
   ].compact
 end
