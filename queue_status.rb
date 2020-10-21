@@ -286,43 +286,65 @@ end
 no_start_data = total_cant_determine_wait.any? && total_cant_determine_wait.length == total_pending
 
 # nodes and job totals
-msg = ["*#{Time.now.strftime("%F %T")}*\n",
-       "#{allocated.length} node(s) are allocated",
-       (": #{allocated.join(", ")}" if allocated.any?),
-       "\n",
-       "#{idle.length} node(s) are idle",
-       (": #{idle.join(", ")}" if idle.any?),
-       "\n",
-       "#{mixed.length} node(s) are mixed (some CPUs in use, some idle)",
-       (": #{mixed.join(", ")}" if mixed.any?),
-       "\n",
-       "#{no_jobs_in_partitions.length} active node(s) have no jobs in any of their partitions",
-       (": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?),
-       "\n",
-       "#{down.length} node(s) are down",
-       (": #{down.join(", ")}" if down.any?),
-       "\n\n",
-       "#{total_running} total job(s) running\n",
-       ("#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}" if total_running > 0),
-       (": #{total_long_running.map {|job| job[1] }.join(", ") }" if total_long_running.any? && show_ids),
-       ("\n" if total_running > 0),
-       "#{total_pending} total job(s) pending\n",
-       "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
-       (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any? && show_ids),
-       "\n",
-       ("Insufficient data to estimate job start times" if no_start_data),
-       ("#{total_long_waiting.length} total job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission" if !no_start_data),
-       (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data && show_ids),
-       ("\nInsufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
-       (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }" if total_cant_determine_wait.any? && !no_start_data && show_ids),
-       ("\nEstimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
-       ("\nInsufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
-       (". Latest known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
-       "\n\n",
-       partition_msg
-].compact
 
-msg = msg.join("")
+if ARGV.include?('verbose')
+  msg = ["*#{Time.now.strftime("%F %T")}*\n",
+         "#{allocated.length} node(s) are allocated",
+         (": #{allocated.join(", ")}" if allocated.any?),
+         "\n",
+         "#{idle.length} node(s) are idle",
+         (": #{idle.join(", ")}" if idle.any?),
+         "\n",
+         "#{mixed.length} node(s) are mixed (some CPUs in use, some idle)",
+         (": #{mixed.join(", ")}" if mixed.any?),
+         "\n",
+         "#{no_jobs_in_partitions.length} active node(s) have no jobs in any of their partitions",
+         (": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?),
+         "\n",
+         "#{down.length} node(s) are down",
+         (": #{down.join(", ")}" if down.any?),
+         "\n\n",
+         "#{total_running} total job(s) running\n",
+         ("#{total_long_running.length} total job(s) have been running for more than #{formatted_threshold(running_threshold)}" if total_running > 0),
+         (": #{total_long_running.map {|job| job[1] }.join(", ") }" if total_long_running.any? && show_ids),
+         ("\n" if total_running > 0),
+         "#{total_pending} total job(s) pending\n",
+         "#{":awooga:" if jobs_no_resources.any?}#{jobs_no_resources.length} total job(s) with no available resources#{":awooga:" if jobs_no_resources.any?}",
+         (": #{jobs_no_resources.map {|job| job[1] }.join(", ") }"  if jobs_no_resources.any? && show_ids),
+         "\n",
+         ("Insufficient data to estimate job start times" if no_start_data),
+         ("#{total_long_waiting.length} total job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission" if !no_start_data),
+         (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data && show_ids),
+         ("\nInsufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
+         (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }" if total_cant_determine_wait.any? && !no_start_data && show_ids),
+         ("\nEstimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
+         ("\nInsufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
+         (". Latest known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
+         "\n\n",
+         partition_msg
+  ].compact
+
+else
+  msg = ["*#{Time.now.strftime("%F %T")}*\n",
+         "*Nodes*\n\n",
+         "#{idle.length} node(s) are idle",
+         (": #{idle.join(", ")}" if idle.any?),
+         "\n",
+         "#{no_jobs_in_partitions.length} active node(s) have no jobs in any of their partitions",
+         (": #{no_jobs_in_partitions.join(", ")}" if no_jobs_in_partitions.any?),
+         "\n\n",
+         "*Jobs*\n\n",
+         "#{total_running} total job(s) are running",
+         (" (#{total_long_running.length} have been running for more than #{formatted_threshold(running_threshold)}" if total_running > 0),
+         "\n",
+         "#{total_pending} total job(s) pending\n",
+         (" (#{total_long_waiting.length} total job(s) not estimated to start within #{formatted_threshold(wait_threshold)} after submission)" if !no_start_data),
+         "\n\n",
+  ].compact
+end
+
+
+
 slack = ARGV.include?("slack")
 text = ARGV.include?("text")
 if !slack && !text
