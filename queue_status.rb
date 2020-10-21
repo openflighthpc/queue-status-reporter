@@ -335,10 +335,10 @@ else
          "\n\n",
          "*Jobs*\n\n",
          "#{total_running} total job(s) are running",
-         (" (#{total_long_running.length} have been running for more than #{formatted_threshold(running_threshold)}" if total_running > 0),
+         (" (#{total_long_running.length} have been running for more than #{formatted_threshold(running_threshold)}"),
          "\n",
-         "#{total_pending} total job(s) pending\n",
-         (" (#{total_long_waiting.length} total job(s) not estimated to start within #{formatted_threshold(wait_threshold)} after submission)" if !no_start_data),
+         "#{total_pending} total job(s) pending",
+         (" (#{total_long_waiting.length} total job(s) not estimated to start within #{formatted_threshold(wait_threshold)} after submission)"),
          "\n\n",
   ].compact
 end
