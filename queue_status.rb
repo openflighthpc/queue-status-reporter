@@ -343,7 +343,7 @@ else
   ].compact
 end
 
-
+msg = msg.join("")
 
 slack = ARGV.include?("slack")
 text = ARGV.include?("text")
