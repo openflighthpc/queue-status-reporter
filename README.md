@@ -45,6 +45,24 @@ By default, `WAIT_THRESHOLD` is set to 720 minutes (12 hours) and `RUN_THRESHOLD
 The application has a single entrypoint, `ruby queue_status.rb`, with three optional parameters to be specified at execution. The information that will be returned will resemble the following:
 
 ```
+2020-10-22 15:48:34
+Nodes
+
+0 node(s) are idle
+0 node(s) are down
+0 active node(s) have no jobs in any of their partitions
+
+Jobs
+
+2 total job(s) are running
+3 total job(s) pending (0 total job(s) estimated not to start within 12hrs after submission)
+
+Estimated time all jobs completed: 2020-10-22 16:48:00 +0100
+```
+
+The standard output has a lot of information omitted. For a more exhaustive output, including breakdowns per partition, include the argument `verbose` at execution time. The output will then resemble the following:
+
+```
 2020-10-13 12:00:00
 2 node(s) are allocated: node01, node02
 0 node(s) are idle
