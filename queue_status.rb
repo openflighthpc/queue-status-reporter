@@ -340,7 +340,7 @@ else
          "#{total_running} total job(s) are running",
          (" (#{total_long_running.length} have been running for more than #{formatted_threshold(running_threshold)}" if total_long_running.any?),
          (": #{total_long_running.map {|job| job[1] }.join(", ") }" if total_long_running.any? && show_ids),
-         (")" it total_long_running.any?),
+         (")" if total_long_running.any?),
          "\n",
          "#{total_pending} total job(s) pending",
          (" (Insufficient data to estimate job start times)" if no_start_data),
