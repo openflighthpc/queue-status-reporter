@@ -342,6 +342,12 @@ else
          "\n",
          "#{total_pending} total job(s) pending",
          (" (#{total_long_waiting.length} total job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission)"),
+         ("Insufficient data to estimate job start times" if no_start_data),
+         "\n"
+         ("#{total_long_waiting.length} total job(s) estimated not to start within #{formatted_threshold(wait_threshold)} after submission" if !no_start_data),
+         (": #{total_long_waiting.map {|job| job[1] }.join(", ") }"  if total_long_waiting.any? && !no_start_data && show_ids),
+         ("\nInsufficient data to estimate job start times for #{total_cant_determine_wait.length} job(s)" if total_cant_determine_wait.any? && !no_start_data),
+         (": #{total_cant_determine_wait.map {|job| job[1] }.join(", ") }" if total_cant_determine_wait.any? && !no_start_data && show_ids),
          ("\nEstimated time all jobs completed: #{final_job_end}" if (total_running + total_pending) > 0 && final_job_end_valid),
          ("\nInsufficient data to estimate time all jobs completed" if (total_running + total_pending) > 0 && !final_job_end_valid),
          (". Latest known end time: #{final_job_end}" if final_job_end && !final_job_end_valid),
